@@ -35,6 +35,12 @@ describe("prompt (comportamiento) y conocimiento (proceso) — PRD 6.5", () => {
     expect(prompt).toMatch(/^# Guardrails/m)
   })
 
+  test("el prompt pide reportar el motivo de cada mensaje rechazado o descartado (HU-1, RN4)", async () => {
+    const prompt = await readFile(RUTA_PROMPT, "utf8")
+    const formato = prompt.split("# Response format")[1]?.split("\n# ")[0] ?? ""
+    expect(formato).toContain("Always add one line per rejected or discarded message with its reason, taken from the tool result")
+  })
+
   test("ninguno de los dos archivos trae resultados del buzón (ids de los fixtures ni msg-00)", async () => {
     for (const ruta of [RUTA_PROMPT, RUTA_CONOCIMIENTO]) {
       const texto = await readFile(ruta, "utf8")

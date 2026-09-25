@@ -1,12 +1,12 @@
 // Escritura del registro (HU-4): maestro sin corrupción ni duplicados (O2), archivo del documento, historial y procesados.
 import { constants } from "node:fs"
-import { copyFile, mkdir, readdir } from "node:fs/promises"
+import { copyFile, mkdir, readdir, rm } from "node:fs/promises"
 import path from "node:path"
 import { esNombreSimple } from "./archivos"
 import { fechaDeRegistro } from "./fechas"
 import { agregarHistorial, crearSlugCliente, escribirMaestro, leerProcesados, marcarProcesado } from "./maestro"
 import { LARGO_MAXIMO_OBJETO } from "./reglas"
-import { carpetaContratosSharepoint, carpetaMensaje } from "./rutas"
+import { carpetaContratosSharepoint, carpetaMensaje, carpetaSalida } from "./rutas"
 import {
   esquemaFilaMaestro,
   type AccionRegistro,
@@ -233,6 +233,16 @@ export async function conCandado<T>(ctx: ContextoHerramienta, fn: () => Promise<
   } finally {
     if (colasDeEscritura.get(ctx.directory) === siguiente) colasDeEscritura.delete(ctx.directory)
   }
+}
+
+/**
+ * Borra out/ del proyecto dentro del candado de escritura (PRD 8: la demo y /api/reset empiezan limpios). Se niega si la
+ * ruta no termina en "out": nunca borra otra carpeta.
+ */
+export async function reiniciarSalida(ctx: ContextoHerramienta): Promise<void> {
+  const carpeta = carpetaSalida(ctx.directory)
+  if (path.basename(carpeta) !== "out") throw new Error(`Se esperaba una carpeta "out"; no se borra nada`)
+  await conCandado(ctx, () => rm(carpeta, { recursive: true, force: true }))
 }
 
 /**

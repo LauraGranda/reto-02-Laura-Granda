@@ -205,8 +205,8 @@ function buscarPrimero(doc: DocumentoAnalizado, segmento: Segmento, patron: RegE
   return buscarTodos(doc, segmento, patron)[0] ?? null
 }
 
-/** Arma un CampoExtraido. */
-function campo<T>(valor: T | null, confianza: number, evidencia: string | null): CampoExtraido<T> {
+/** Arma un CampoExtraido (el tipo del valor es el mismo que define el esquema, sin undefined). */
+function campo<T>(valor: CampoExtraido<T>["valor"], confianza: number, evidencia: string | null): CampoExtraido<T> {
   return { valor, confianza, evidencia }
 }
 

@@ -49,12 +49,14 @@ export type Fecha = z.infer<typeof esquemaFecha>
 /**
  * Fábrica de un campo extraído con su confianza (HU-2): valor null si no está en el texto,
  * confianza en [0, 1] y un fragmento corto del texto como evidencia.
+ * Tolerante al copiar: si el modelo omite `valor` o `evidencia` null, se completan con null. La confianza sigue
+ * obligatoria, y validar/registrar re-extraen del documento, así que esto no debilita la validación (CA2).
  */
 export function esquemaCampoExtraido<T extends z.ZodType>(esquemaValor: T) {
   return z.object({
-    valor: esquemaValor.nullable(),
+    valor: esquemaValor.nullable().default(null),
     confianza: z.number().min(0).max(1),
-    evidencia: z.string().max(120).nullable(),
+    evidencia: z.string().max(120).nullable().default(null),
   })
 }
 export type CampoExtraido<T> = z.infer<ReturnType<typeof esquemaCampoExtraido<z.ZodType<T>>>>
