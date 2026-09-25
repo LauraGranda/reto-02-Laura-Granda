@@ -122,6 +122,18 @@ export type FilaMaestro = z.infer<typeof esquemaFilaMaestro>
 
 // ── Buzón (6.2 contratos_leer_buzon, HU-1) ─────────────────────────────────
 
+/** Contenido de fixtures/reto-02/buzon/<id>/correo.json (7.1); se valida al leerlo. */
+export const esquemaCorreo = z.object({
+  id: z.string(),
+  de: z.string(),
+  para: z.string(),
+  asunto: z.string(),
+  fecha: z.string(),
+  cuerpo: z.string(),
+  adjuntos: z.array(z.string()),
+})
+export type Correo = z.infer<typeof esquemaCorreo>
+
 /** Resumen de un mensaje del buzón que devuelve `contratos_leer_buzon` (HU-1, 7.1). */
 export const esquemaMensajeBuzon = z.object({
   id: z.string().min(1),

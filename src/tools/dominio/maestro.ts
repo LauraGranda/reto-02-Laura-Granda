@@ -1,8 +1,9 @@
 // Lectura/escritura del maestro CSV en out/sharepoint/, archivo del contrato e historial.jsonl (HU-4, RN6).
-import { appendFile, copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises"
+import { appendFile, copyFile, mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import Papa from "papaparse"
 import { z } from "zod"
+import { existeArchivo, leerTextoUtf8 } from "./archivos"
 import {
   carpetaSalida,
   carpetaSharepoint,
@@ -29,21 +30,6 @@ type RegistroCsv = Record<string, string>
 
 /** Sufijos societarios que no aportan al slug, del más largo al más corto para que no se corten a medias. */
 const PATRON_SUFIJO_SOCIETARIO = /\s+(s\.?\s*de\s*r\.?\s*l\.?|s\.?\s*a\.?\s*s\.?|s\.?\s*a\.?\s*c\.?|s\.?\s*a\.?|ltda\.?)$/
-
-/** Lee un archivo de texto en UTF-8 sin BOM y con saltos de línea \n (compatibilidad Windows/Linux). */
-async function leerTextoUtf8(ruta: string): Promise<string> {
-  const texto = await readFile(ruta, "utf8")
-  return texto.replace(/^﻿/, "").replace(/\r\n/g, "\n")
-}
-
-/** Indica si existe un archivo en la ruta dada. */
-async function existeArchivo(ruta: string): Promise<boolean> {
-  try {
-    return (await stat(ruta)).isFile()
-  } catch {
-    return false
-  }
-}
 
 /** Convierte un registro de texto del CSV en FilaMaestro validada; el número de fila va en el error. */
 function convertirFilaCsv(registro: RegistroCsv, numeroFila: number): FilaMaestro {
