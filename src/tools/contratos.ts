@@ -1,9 +1,25 @@
 // Herramientas del agente (cada export → contratos_<export>); solo definiciones, la lógica vive en src/tools/dominio/.
-import { evaluarAdjuntos, leerCorreo, listarMensajesPendientes } from "./dominio/buzon"
-import { camposBajoUmbral, extraerContrato } from "./dominio/extraccion"
+import { extraerContratoDelMensaje, leerCorreo, listarMensajesPendientes } from "./dominio/buzon"
+import { rechazarSinExtraccion, validarContrato } from "./dominio/clasificacion"
+import { resolverComercial } from "./dominio/comerciales"
+import { camposBajoUmbral } from "./dominio/extraccion"
 import { ejecutarConSeguridad, esquemaMensajeId, validarArgumentos, type Herramienta } from "./dominio/herramienta"
+import { leerMaestro } from "./dominio/maestro"
+import { esquemaContratoExtraido, type ResultadoValidacion } from "./dominio/tipos"
 
 const ARGS_EXTRAER = { mensaje_id: esquemaMensajeId }
+
+const ARGS_VALIDAR = {
+  mensaje_id: esquemaMensajeId,
+  contrato: esquemaContratoExtraido.describe(
+    "Contrato tal como lo devolvió contratos_extraer (o con valores corregidos); se compara con una nueva extracción del adjunto",
+  ),
+}
+
+/** mensaje_id recibido, solo si es texto, para dejarlo en el log aunque sea inválido (RN7). */
+function idParaLog(valor: unknown): string | null {
+  return typeof valor === "string" ? valor : null
+}
 
 /** contratos_leer_buzon (HU-1): mensajes pendientes y si cada uno trae contrato; los que no, prerrechazados (RN4). */
 export const leer_buzon: Herramienta<{}> = {
@@ -27,19 +43,39 @@ export const extraer: Herramienta<typeof ARGS_EXTRAER> = {
   description: "Extrae los datos del contrato adjunto a un mensaje del buzón, con confianza y evidencia por campo.",
   args: ARGS_EXTRAER,
   async execute(args, ctx) {
-    const idRecibido = typeof args.mensaje_id === "string" ? args.mensaje_id : null
-    return ejecutarConSeguridad("contratos_extraer", idRecibido, ctx, async () => {
+    return ejecutarConSeguridad("contratos_extraer", idParaLog(args.mensaje_id), ctx, async () => {
       const { mensaje_id } = validarArgumentos(ARGS_EXTRAER, args)
       const correo = await leerCorreo(ctx, mensaje_id)
-      const evaluacion = await evaluarAdjuntos(ctx, mensaje_id, correo)
-      if (evaluacion.adjunto === null) throw new Error(evaluacion.motivo)
-      const resultado = extraerContrato(evaluacion.adjunto.texto, { fecha: correo.fecha.slice(0, 10) })
-      if (!resultado.ok) throw new Error(resultado.error)
-      const bajos = camposBajoUmbral(resultado.data)
+      const extraccion = await extraerContratoDelMensaje(ctx, mensaje_id, correo)
+      if (!extraccion.ok) throw new Error(extraccion.error)
+      const { adjunto, contrato } = extraccion.data
+      const bajos = camposBajoUmbral(contrato)
       return {
-        data: { mensaje_id, adjunto: evaluacion.adjunto.nombre, contrato: resultado.data },
-        resumen: `${resultado.data.id_contrato.valor ?? "sin id"}; campos < 0.8: ${bajos.join(", ") || "ninguno"}`,
+        data: { mensaje_id, adjunto, contrato },
+        resumen: `${contrato.id_contrato.valor ?? "sin id"}; campos < 0.8: ${bajos.join(", ") || "ninguno"}`,
       }
+    })
+  },
+}
+
+/**
+ * contratos_validar (HU-3): re-extrae el adjunto (CA2), clasifica contra el maestro (RN1–RN4), marca revisión (RN5)
+ * y resuelve el comercial. Solo escribe la copia inicial del maestro (RN6) y el log (RN7).
+ */
+export const validar: Herramienta<typeof ARGS_VALIDAR> = {
+  description:
+    "Compara un contrato extraído contra el maestro y lo clasifica como nuevo, actualización, duplicado o rechazado, indicando qué campos requieren revisión humana.",
+  args: ARGS_VALIDAR,
+  async execute(args, ctx) {
+    return ejecutarConSeguridad("contratos_validar", idParaLog(args.mensaje_id), ctx, async () => {
+      const { mensaje_id, contrato } = validarArgumentos(ARGS_VALIDAR, args)
+      const [filas, correo] = await Promise.all([leerMaestro(ctx), leerCorreo(ctx, mensaje_id)])
+      const extraccion = await extraerContratoDelMensaje(ctx, mensaje_id, correo)
+      const resultado = extraccion.ok
+        ? validarContrato({ recibido: contrato, extraido: extraccion.data.contrato, filas })
+        : rechazarSinExtraccion(extraccion.error)
+      const data: ResultadoValidacion = { ...resultado, comercial: await resolverComercial(ctx, correo.de) }
+      return { data, resumen: `${data.clasificacion}; revisión: ${data.requiere_revision.join(", ") || "ninguna"}` }
     })
   },
 }
