@@ -191,6 +191,7 @@ export const esquemaRegistroProcesado = z.object({
   clasificacion: esquemaClasificacion,
   accion: z.string(),
   ts: z.string(),
+  motivo: z.string().optional(),
 })
 export type RegistroProcesado = z.infer<typeof esquemaRegistroProcesado>
 
@@ -198,14 +199,28 @@ export type RegistroProcesado = z.infer<typeof esquemaRegistroProcesado>
 export const esquemaProcesados = z.record(z.string(), esquemaRegistroProcesado)
 export type Procesados = z.infer<typeof esquemaProcesados>
 
-/** Una línea de out/sharepoint/historial.jsonl (HU-4, RN2); confirmado_por queda cuando hubo confirmación humana. */
+/** Acciones que devuelve contratos_registrar (HU-4): alta, cambio de una fila existente o nada (duplicado, RN1). */
+export const ACCIONES_REGISTRO = ["insertado", "actualizado", "sin_escritura"] as const
+export type AccionRegistro = (typeof ACCIONES_REGISTRO)[number]
+
+/** Corrección humana de un campo: lo que extrajo la herramienta y lo que quedó registrado (HU-2, CA2). */
+export const esquemaCorrecciones = z.record(z.string(), z.object({ extraido: z.string(), final: z.string() }))
+export type Correcciones = z.infer<typeof esquemaCorrecciones>
+
+/**
+ * Una línea de out/sharepoint/historial.jsonl (HU-4, RN2). Con confirmación humana quedan confirmado_por,
+ * los campos confirmados y las correcciones { extraido, final } de cada campo corregido.
+ */
 export const esquemaEntradaHistorial = z.object({
   ts: z.string(),
   id_contrato: z.string(),
   accion: z.string(),
   cambios: esquemaDiferencias,
   mensaje_id: z.string(),
+  ruta_archivo: z.string().optional(),
   confirmado_por: z.string().optional(),
+  campos_confirmados: z.array(z.string()).optional(),
+  correcciones: esquemaCorrecciones.optional(),
 })
 export type EntradaHistorial = z.infer<typeof esquemaEntradaHistorial>
 
