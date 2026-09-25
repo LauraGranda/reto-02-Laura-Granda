@@ -1,25 +1,21 @@
 // Servidor HTTP (Bun.serve): rutas de la API, sirve web/index.html y delega el ciclo a src/agent/loop.ts.
 import path from "node:path"
+import { describirProveedor } from "./llm/fabrica"
 
 type Manejador = (peticion: Request) => Response | Promise<Response>
 
 const PUERTO = Number(process.env.PORT) || 3000
 const HOSTNAME = "0.0.0.0"
 const RUTA_INDEX = path.join(import.meta.dir, "..", "web", "index.html")
-const SIN_CONFIGURAR = "sin_configurar"
 
 /** Sirve el front de chat (web/index.html). */
 function servirFront(): Response {
   return new Response(Bun.file(RUTA_INDEX))
 }
 
-/** Informa proveedor y modelo configurados (API 6.4) sin exponer claves. */
+/** Informa proveedor y modelo configurados (API 6.4) sin leer ni exponer claves. */
 function responderSalud(): Response {
-  return Response.json({
-    ok: true,
-    provider: process.env.LLM_PROVIDER || SIN_CONFIGURAR,
-    model: process.env.LLM_MODEL || SIN_CONFIGURAR,
-  })
+  return Response.json({ ok: true, ...describirProveedor() })
 }
 
 /** Respuesta estándar para rutas no registradas. */
