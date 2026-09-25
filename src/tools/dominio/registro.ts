@@ -216,9 +216,29 @@ async function exigirNoProcesado(ctx: ContextoHerramienta, mensajeId: string): P
   if (mensajeId in (await leerProcesados(ctx))) throw new Error(`El mensaje ${mensajeId} ya fue procesado`)
 }
 
+/** Última escritura en curso por carpeta de proyecto; las siguientes esperan su turno. */
+const colasDeEscritura = new Map<string, Promise<void>>()
+
+/**
+ * Ejecuta `fn` cuando termina la escritura anterior sobre la misma carpeta (O2). Registrar lee el maestro, agrega su
+ * fila y lo reescribe: dos llamadas en paralelo se pisarían y una fila se perdería. Un fallo no bloquea la cola.
+ */
+export async function conCandado<T>(ctx: ContextoHerramienta, fn: () => Promise<T>): Promise<T> {
+  const anterior = colasDeEscritura.get(ctx.directory) ?? Promise.resolve()
+  const actual = anterior.then(fn)
+  const siguiente = actual.then(() => undefined, () => undefined)
+  colasDeEscritura.set(ctx.directory, siguiente)
+  try {
+    return await actual
+  } finally {
+    if (colasDeEscritura.get(ctx.directory) === siguiente) colasDeEscritura.delete(ctx.directory)
+  }
+}
+
 /**
  * contratos_registrar (HU-4): valida de nuevo con la misma lógica de validar (CA2), exige confirmación si hay
  * campos en revisión (RN5), escribe según la clasificación y SOLO al final marca el mensaje como procesado.
+ * Todo ocurre dentro del candado, así cada registro parte del maestro que dejó el anterior (O2).
  */
 export async function registrarMensaje(
   ctx: ContextoHerramienta,
@@ -226,30 +246,35 @@ export async function registrarMensaje(
   recibido: ContratoExtraido,
   confirmado: boolean,
 ): Promise<ResultadoRegistro> {
-  await exigirNoProcesado(ctx, mensajeId)
-  const validado = await validarMensaje(ctx, mensajeId, recibido)
-  const { clasificacion, requiere_revision, motivo } = validado.resultado
-  if (clasificacion === "rechazado") throw new Error(`El mensaje fue rechazado: ${motivo ?? "sin motivo"}. Usa descartar`)
-  if (requiere_revision.length > 0 && !confirmado) throw new Error(`requiere revisión: ${requiere_revision.join(", ")}`)
-  const escritura = await escribirSegunClasificacion(ctx, mensajeId, validado, confirmado)
-  await marcarProcesado(ctx, mensajeId, { clasificacion, accion: escritura.accion })
-  return { ...escritura, clasificacion }
+  return conCandado(ctx, async () => {
+    await exigirNoProcesado(ctx, mensajeId)
+    const validado = await validarMensaje(ctx, mensajeId, recibido)
+    const { clasificacion, requiere_revision, motivo } = validado.resultado
+    if (clasificacion === "rechazado") throw new Error(`El mensaje fue rechazado: ${motivo ?? "sin motivo"}. Usa descartar`)
+    if (requiere_revision.length > 0 && !confirmado) throw new Error(`requiere revisión: ${requiere_revision.join(", ")}`)
+    const escritura = await escribirSegunClasificacion(ctx, mensajeId, validado, confirmado)
+    await marcarProcesado(ctx, mensajeId, { clasificacion, accion: escritura.accion })
+    return { ...escritura, clasificacion }
+  })
 }
 
 /**
  * contratos_descartar (RN4, RN1): cierra un mensaje que no se registra. Solo si no trae contrato o su validación
  * da rechazado o duplicado; si trae un contrato registrable, se exige usar registrar. No toca el maestro.
+ * Va dentro del candado porque también reescribe out/procesados.json.
  */
 export async function descartarMensaje(
   ctx: ContextoHerramienta,
   mensajeId: string,
   motivo: string,
 ): Promise<{ mensaje_id: string; clasificacion: Clasificacion; accion: "descartado" }> {
-  await exigirNoProcesado(ctx, mensajeId)
-  const { clasificacion } = (await validarMensaje(ctx, mensajeId, null)).resultado
-  if (clasificacion !== "rechazado" && clasificacion !== "duplicado") {
-    throw new Error("El mensaje contiene un contrato registrable; usa registrar")
-  }
-  await marcarProcesado(ctx, mensajeId, { clasificacion, accion: "descartado", motivo })
-  return { mensaje_id: mensajeId, clasificacion, accion: "descartado" }
+  return conCandado(ctx, async () => {
+    await exigirNoProcesado(ctx, mensajeId)
+    const { clasificacion } = (await validarMensaje(ctx, mensajeId, null)).resultado
+    if (clasificacion !== "rechazado" && clasificacion !== "duplicado") {
+      throw new Error("El mensaje contiene un contrato registrable; usa registrar")
+    }
+    await marcarProcesado(ctx, mensajeId, { clasificacion, accion: "descartado", motivo })
+    return { mensaje_id: mensajeId, clasificacion, accion: "descartado" as const }
+  })
 }
