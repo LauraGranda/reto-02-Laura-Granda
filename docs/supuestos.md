@@ -54,3 +54,9 @@
 - **Registrados desde el corte.** Criterio: `fecha_registro ≥ 2026-05-30`, porque es la columna del maestro que indica cuándo entró la fila y así se ve qué cubrió el agente del gap. No se filtra por `hoy`. Un otrosí no cambia `fecha_registro` (actualiza una fila existente), por eso CT-2026-011 aparece en "Actualizados desde el corte", que se lee de `historial.jsonl`.
 - **Pólizas no vigentes.** Todo contrato con `requiere_poliza = true` y `estado_poliza` distinto de "vigente" ("pendiente" o "vencida"), aunque el contrato ya haya terminado: la póliza sigue siendo un riesgo abierto hasta que alguien la cierre.
 - **Determinismo.** El reporte no incluye hora de generación ni timestamps, y los valores se formatean a mano (miles con ".") en lugar de con `Intl`: la misma fecha y el mismo maestro producen el mismo archivo en Windows y en Linux.
+
+## Demo (PRD 6.6 y 8)
+
+- **Fecha de registro fija en la demo.** `demo.ts` fija `fechaActual: "2026-09-03"` en el contexto de las herramientas, así `fecha_registro`, la salida impresa y `out/alertas.md` son idénticos en cada ejecución (PRD 8). La aplicación no fija esa fecha y registra con la fecha real. La fecha va en el contexto y no en los argumentos: solo la fija quien llama (demo o tests) y el modelo nunca la ve ni la controla.
+- **Limpieza de out/.** La demo borra solo la carpeta `out/` del proyecto (verifica que la ruta termine en "out" antes de borrar) y deja `out/log.jsonl` con todas las llamadas (RN7).
+- **Confirmación simulada.** La segunda pasada simula la respuesta de la analista del ejemplo del PRD ("confirmo el valor 0 y la fecha fin 2027-08-31") y llama `contratos_registrar` con `confirmado: true` solo para los mensajes que quedaron en "requiere revisión".

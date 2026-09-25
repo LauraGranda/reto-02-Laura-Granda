@@ -3,7 +3,7 @@ import { constants } from "node:fs"
 import { copyFile, mkdir, readdir } from "node:fs/promises"
 import path from "node:path"
 import { esNombreSimple } from "./archivos"
-import { fechaHoyISO } from "./fechas"
+import { fechaDeRegistro } from "./fechas"
 import { agregarHistorial, crearSlugCliente, escribirMaestro, leerProcesados, marcarProcesado } from "./maestro"
 import { LARGO_MAXIMO_OBJETO } from "./reglas"
 import { carpetaContratosSharepoint, carpetaMensaje } from "./rutas"
@@ -177,7 +177,7 @@ async function registrarNuevo(ctx: ContextoHerramienta, mensajeId: string, v: Me
   const anio = (contrato.fecha_inicio.valor ?? "").slice(0, 4)
   const id = contrato.id_contrato.valor ?? generarIdAuto(v.filas, anio)
   const conId = { ...contrato, id_contrato: { ...contrato.id_contrato, valor: id } }
-  const base = construirFilaNueva(conId, v.resultado.comercial, "", fechaHoyISO())
+  const base = construirFilaNueva(conId, v.resultado.comercial, "", fechaDeRegistro(ctx))
   const ruta = await archivarDocumento(ctx, rutaAdjunto(ctx, mensajeId, adjunto), anio, crearSlugCliente(base.cliente), `${id}${path.extname(adjunto)}`)
   await escribirMaestroSeguro(ctx, [...v.filas, { ...base, ruta_sharepoint: ruta }])
   await agregarHistorial(ctx, entradaHistorial({ id_contrato: id, accion: "insertado", cambios: {}, mensaje_id: mensajeId, ruta_archivo: ruta }, v, confirmado))
