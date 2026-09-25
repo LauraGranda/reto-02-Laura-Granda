@@ -1,4 +1,5 @@
 // Constantes de reglas de negocio: umbral de confianza, días de alerta, fecha de corte, catálogos.
+import type { Moneda, Pais } from "./tipos"
 
 /** Confianza mínima para registrar sin revisión humana; por debajo va a requiere_revision (RN5, O3). */
 export const UMBRAL_CONFIANZA = 0.8
@@ -17,6 +18,19 @@ export const LARGO_MAXIMO_OBJETO = 200
 
 /** NIT de Periferia (contratista); nunca debe tomarse como nit_cliente (resultados esperados msg-001). */
 export const NIT_PERIFERIA = "900123456"
+
+/**
+ * Último recurso cuando el contrato no menciona ninguna moneda: la de curso legal del país
+ * (en Panamá circula el dólar; el balboa solo existe en monedas). Es una suposición, no un dato:
+ * se registra con confianza DERIVADO (0.6) para que pase a revisión humana (RN5).
+ */
+export const MONEDA_POR_PAIS: Record<Pais, Moneda> = {
+  CO: "COP",
+  EC: "USD",
+  PE: "PEN",
+  PA: "USD",
+  HN: "HNL",
+}
 
 /**
  * Niveles de confianza por campo extraído (HU-2, RN5):
