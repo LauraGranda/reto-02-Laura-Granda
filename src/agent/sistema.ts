@@ -2,7 +2,8 @@
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
-const SEPARADOR = "\n\n# Process knowledge\n\n"
+/** Encabezado del conocimiento con el mismo nombre que cita el prompt (y que el skill del módulo, PRD 9.4). */
+const SEPARADOR = "\n\n# registro-contratos process knowledge\n\n"
 
 /**
  * Lee agent/prompt.md y src/knowledge/registro-contratos.md y los une (6.1: prompt en archivo aparte; 6.5: separación
