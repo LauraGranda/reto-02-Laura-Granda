@@ -1,5 +1,6 @@
 // Esquemas zod y tipos derivados (z.infer) del dominio: correo, contrato extraído, fila del maestro.
 import { z } from "zod"
+import { esFechaValida } from "./fechas"
 import { LARGO_MAXIMO_OBJETO } from "./reglas"
 
 // ── Enumeraciones (7.2, 6.2) ──────────────────────────────────────────────
@@ -36,8 +37,11 @@ export type Fuente = z.infer<typeof esquemaFuente>
 
 // ── Primitivos ─────────────────────────────────────────────────────────────
 
-/** Fecha como string YYYY-MM-DD (7.2); se trabaja como texto para evitar zonas horarias. */
-export const esquemaFecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha debe tener formato YYYY-MM-DD")
+/** Fecha real como string YYYY-MM-DD (7.2); "2026-02-30" se rechaza (HU-6). Texto para evitar zonas horarias. */
+export const esquemaFecha = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha debe tener formato YYYY-MM-DD")
+  .refine(esFechaValida, "Fecha inexistente")
 export type Fecha = z.infer<typeof esquemaFecha>
 
 // ── Contrato extraído (6.2 contratos_extraer, HU-2) ─────────────────────────
@@ -154,13 +158,14 @@ export const esquemaDiferencias = z.record(z.string(), z.object({ antes: z.strin
 export type Diferencias = z.infer<typeof esquemaDiferencias>
 
 /**
- * Salida de `contratos_validar` (HU-3): clasificación RN1–RN4, campos en revisión (RN5),
- * diferencias contra el maestro y el comercial resuelto desde comerciales.json.
+ * Salida de `contratos_validar` (HU-3): clasificación RN1–RN4, campos en revisión (RN5), conflictos legibles
+ * (con el maestro o con la re-extracción), diferencias contra el maestro y el comercial resuelto desde comerciales.json.
  */
 export const esquemaResultadoValidacion = z.object({
   clasificacion: esquemaClasificacion,
   id_contrato_existente: z.string().nullable(),
   requiere_revision: z.array(z.string()),
+  conflictos: z.array(z.string()),
   diferencias: esquemaDiferencias,
   comercial: z.object({
     email: z.string(),

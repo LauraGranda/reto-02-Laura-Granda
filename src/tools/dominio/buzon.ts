@@ -2,10 +2,17 @@
 import { readdir } from "node:fs/promises"
 import path from "node:path"
 import { existeArchivo, leerTextoUtf8 } from "./archivos"
-import { motivoNoEsContrato } from "./extraccion"
+import { extraerContrato, motivoNoEsContrato } from "./extraccion"
 import { leerProcesados } from "./maestro"
 import { carpetaBuzon, carpetaMensaje } from "./rutas"
-import { esquemaCorreo, type ContextoHerramienta, type Correo, type MensajeBuzon } from "./tipos"
+import {
+  esquemaCorreo,
+  type ContextoHerramienta,
+  type ContratoExtraido,
+  type Correo,
+  type MensajeBuzon,
+  type ResultadoHerramienta,
+} from "./tipos"
 
 /** Adjunto ya leído: nombre del archivo y su texto. */
 export type AdjuntoLeido = { nombre: string; texto: string }
@@ -86,6 +93,22 @@ export async function evaluarAdjuntos(ctx: ContextoHerramienta, mensajeId: strin
   }
   const motivo = motivos.length === 1 ? (motivos[0] ?? "") : `Ningún adjunto es un contrato: ${motivos.join("; ")}`
   return { adjunto: null, motivo }
+}
+
+/**
+ * Extrae el contrato adjunto a un mensaje (HU-2): busca el adjunto de contrato y aplica extraerContrato con la fecha
+ * del correo. Única ruta de extracción: la usan contratos_extraer y contratos_validar (re-extracción, CA2).
+ */
+export async function extraerContratoDelMensaje(
+  ctx: ContextoHerramienta,
+  mensajeId: string,
+  correo: Correo,
+): Promise<ResultadoHerramienta<{ adjunto: string; contrato: ContratoExtraido }>> {
+  const evaluacion = await evaluarAdjuntos(ctx, mensajeId, correo)
+  if (evaluacion.adjunto === null) return { ok: false, error: evaluacion.motivo }
+  const resultado = extraerContrato(evaluacion.adjunto.texto, { fecha: correo.fecha.slice(0, 10) })
+  if (!resultado.ok) return resultado
+  return { ok: true, data: { adjunto: evaluacion.adjunto.nombre, contrato: resultado.data } }
 }
 
 /** Primer adjunto del correo cuyo contenido es un contrato, o null (HU-1). */
