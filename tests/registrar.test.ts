@@ -216,6 +216,25 @@ describe("casos en copias limpias", () => {
     expect("msg-002" in (await leerProcesados(ctx))).toBe(false)
   })
 
+  test("escrituras en paralelo no se pisan: dos registrar y un descartar simultáneos", async () => {
+    const paralelo = await crearCopia()
+    try {
+      const [c1, c2] = await Promise.all([extraerContrato(paralelo, "msg-001"), extraerContrato(paralelo, "msg-002")])
+      const respuestas = await Promise.all([
+        registrar.execute({ mensaje_id: "msg-001", contrato: c1 }, paralelo),
+        registrar.execute({ mensaje_id: "msg-002", contrato: c2 }, paralelo),
+        descartar.execute({ mensaje_id: "msg-005", motivo: "cotización" }, paralelo),
+      ])
+      expect(respuestas.map((r) => (JSON.parse(r) as { ok: boolean }).ok)).toEqual([true, true, true])
+      const ids = (await leerMaestro(paralelo)).map((fila) => fila.id_contrato)
+      expect(ids).toHaveLength(10)
+      expect(ids).toEqual(expect.arrayContaining(["CT-2026-015", "CT-2026-016"]))
+      expect(Object.keys(await leerProcesados(paralelo)).sort()).toEqual(["msg-001", "msg-002", "msg-005"])
+    } finally {
+      await rm(paralelo.directory, { recursive: true, force: true })
+    }
+  })
+
   test("falta un dato obligatorio aunque haya confirmación → error", async () => {
     const corregir = (contrato: ContratoExtraido) => ({ ...contrato, nit_cliente: { valor: null, confianza: 0, evidencia: null } })
     expect(await registrarMensaje(ctx, "msg-002", { confirmado: true, corregir })).toEqual({
