@@ -15,6 +15,7 @@ import {
 import {
   COLUMNAS_MAESTRO,
   esquemaComercial,
+  esquemaEntradaHistorial,
   esquemaFilaMaestro,
   esquemaProcesados,
   type Comercial,
@@ -91,6 +92,20 @@ export async function agregarHistorial(ctx: ContextoHerramienta, entrada: Omit<E
   const ruta = rutaHistorial(ctx.directory)
   await mkdir(path.dirname(ruta), { recursive: true })
   await appendFile(ruta, JSON.stringify(linea) + "\n", "utf8")
+}
+
+/** Lee out/sharepoint/historial.jsonl (HU-4) validando cada línea; vacío si no existe. Línea inválida → error con su número (HU-6). */
+export async function leerHistorial(ctx: ContextoHerramienta): Promise<EntradaHistorial[]> {
+  const ruta = rutaHistorial(ctx.directory)
+  if (!(await existeArchivo(ruta))) return []
+  const lineas = (await leerTextoUtf8(ruta)).split("\n").filter((linea) => linea.trim() !== "")
+  return lineas.map((linea, indice) => {
+    try {
+      return esquemaEntradaHistorial.parse(JSON.parse(linea))
+    } catch {
+      throw new Error(`historial.jsonl tiene una línea inválida (línea ${indice + 1})`)
+    }
+  })
 }
 
 /** Lee y valida fixtures/reto-02/comerciales.json para resolver el remitente (7.1, HU-3). */
