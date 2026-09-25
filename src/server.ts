@@ -19,6 +19,13 @@ export type DependenciasServidor = {
 type Manejador = (peticion: Request, parametro: string) => Promise<Response>
 
 const MAX_BYTES_CUERPO = 20 * 1024
+
+/** Lista blanca de archivos del front (ruta → [archivo en web/, Content-Type]); nunca se sirven rutas arbitrarias del disco. */
+const ARCHIVOS_ESTATICOS: Record<string, readonly [string, string]> = {
+  "/": ["index.html", "text/html; charset=utf-8"],
+  "/markdown.js": ["markdown.js", "text/javascript; charset=utf-8"],
+  "/logo.jpg": ["images.jpg", "image/jpeg"],
+}
 const PATRON_SESION = /^\/api\/sessions\/([^/]+)$/
 const esquemaChat = z.object({ sessionId: esquemaSessionId, message: z.string() })
 
@@ -74,8 +81,16 @@ export function crearManejador(deps: DependenciasServidor): (peticion: Request) 
     return Response.json({ ok: true })
   }
 
+  /** Sirve un archivo de la lista blanca del front con su Content-Type (6.1); no-store: siempre la versión actual. */
+  const servirEstatico = (archivo: string, tipo: string): Manejador => async () =>
+    new Response(Bun.file(path.join(deps.raiz, "web", archivo)), { headers: { "Content-Type": tipo, "Cache-Control": "no-store" } })
+
+  const estaticos = Object.fromEntries(
+    Object.entries(ARCHIVOS_ESTATICOS).map(([ruta, [archivo, tipo]]) => [`GET ${ruta}`, servirEstatico(archivo, tipo)]),
+  )
+
   const rutas: Record<string, Manejador> = {
-    "GET /": async () => new Response(Bun.file(path.join(deps.raiz, "web", "index.html"))),
+    ...estaticos,
     "GET /api/health": async () => Response.json({ ok: true, ...describirProveedor() }),
     "POST /api/chat": responderChat,
     "POST /api/reset": responderReset,

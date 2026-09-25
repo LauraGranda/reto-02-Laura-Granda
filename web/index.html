@@ -4,9 +4,359 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Registro de Contratos Vigentes</title>
+  <style>
+    :root {
+      --fondo: #f6f7f9; --superficie: #ffffff; --texto: #1d2330; --suave: #5b6475; --borde: #dde1e8;
+      --acento: #1f5fbf; --acento-texto: #ffffff; --usuario: #e7eefb; --error: #b42318; --error-fondo: #fdecea;
+      --aviso: #b54708; --aviso-fondo: #fff7d6; --aviso-borde: #e6b800; --codigo: #eef0f4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fondo: #111418; --superficie: #1a1f26; --texto: #e6e9ee; --suave: #9aa3b2; --borde: #2c333d;
+        --acento: #5b9bff; --acento-texto: #0d1117; --usuario: #1e2b40; --error: #ff8a80; --error-fondo: #3a1d1d;
+        --aviso: #ffd666; --aviso-fondo: #3a3115; --aviso-borde: #c9a227; --codigo: #252b34;
+      }
+    }
+    * { box-sizing: border-box; }
+    /* El atributo hidden debe ganarle a cualquier display (ej. #banner usa display:flex) */
+    [hidden] { display: none !important; }
+    body {
+      margin: 0; background: var(--fondo); color: var(--texto);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .app { max-width: 900px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; padding: 0 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--borde); }
+    header h1 { font-size: 1.25rem; margin: 0; }
+    .marca { display: flex; align-items: center; gap: 12px; }
+    .marca img { height: 44px; width: auto; border-radius: 8px; }
+    #proveedor { color: var(--suave); font-size: .85rem; }
+    button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto); padding: 8px 14px; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    button.primario { background: var(--acento); color: var(--acento-texto); border-color: var(--acento); }
+    main { flex: 1; padding: 16px 0; }
+    #vacio { max-width: 640px; margin: 0 auto; padding: 24px 0; }
+    #vacio h2 { font-size: 1.05rem; margin: 0 0 10px; }
+    .guia { margin: 0 0 14px; padding-left: 22px; }
+    .guia li { margin-bottom: 6px; }
+    .nota { font-size: .85rem; color: var(--suave); margin: 0 0 8px; }
+    #sugerencias { margin-top: 18px; }
+    #aviso { background: var(--usuario); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: .9rem; }
+    #consejo { font-size: .8rem; color: var(--suave); margin: 0 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #sugerencias { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    #sugerencias button { max-width: 620px; text-align: left; }
+    #mensajes { display: flex; flex-direction: column; gap: 14px; }
+    .mensaje { padding: 12px 14px; border-radius: 12px; max-width: 88%; overflow-wrap: anywhere; }
+    .mensaje.usuario { align-self: flex-end; background: var(--usuario); white-space: pre-wrap; }
+    .mensaje.asistente { align-self: flex-start; background: var(--superficie); border: 1px solid var(--borde); }
+    .mensaje.asistente.confirmacion { border: 2px solid var(--aviso-borde); }
+    .mensaje.error { align-self: flex-start; background: var(--error-fondo); color: var(--error); }
+    .contenido > :first-child { margin-top: 0; }
+    .contenido > :last-child { margin-bottom: 0; }
+    .contenido h3, .contenido h4, .contenido h5 { margin: 14px 0 6px; }
+    .contenido code { background: var(--codigo); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+    .contenido hr { border: 0; border-top: 1px solid var(--borde); margin: 12px 0; }
+    .tabla { overflow-x: auto; margin: 8px 0; }
+    .tabla table { border-collapse: collapse; font-size: .9rem; }
+    .tabla th, .tabla td { border: 1px solid var(--borde); padding: 6px 10px; text-align: left; vertical-align: top; }
+    .tabla th { background: var(--codigo); }
+    details.herramientas { margin-top: 10px; font-size: .85rem; color: var(--suave); }
+    details.herramientas summary { cursor: pointer; }
+    .llamada { display: grid; grid-template-columns: auto auto 1fr; gap: 4px 8px; align-items: baseline; padding: 6px 0; border-top: 1px dashed var(--borde); }
+    .llamada code { font-size: .85em; color: var(--texto); }
+    .llamada details { grid-column: 1 / -1; }
+    .llamada pre { margin: 4px 0 0; padding: 8px; background: var(--codigo); border-radius: 6px; overflow-x: auto; font-size: .8rem; color: var(--texto); }
+    #trabajando { color: var(--suave); padding: 8px 0; }
+    #trabajando .punto { animation: parpadeo 1.2s infinite; }
+    #trabajando .punto:nth-child(2) { animation-delay: .2s; }
+    #trabajando .punto:nth-child(3) { animation-delay: .4s; }
+    @keyframes parpadeo { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+    .composer { position: sticky; bottom: 0; background: var(--fondo); padding: 10px 0 12px; border-top: 1px solid var(--borde); }
+    #banner { background: var(--aviso-fondo); color: var(--aviso); border: 1px solid var(--aviso-borde); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    form { display: flex; gap: 10px; align-items: flex-end; }
+    textarea { flex: 1; resize: vertical; min-height: 48px; max-height: 200px; font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto); }
+    #contador { font-size: .8rem; color: var(--suave); text-align: right; margin-top: 4px; }
+    #contador.excedido { color: var(--error); font-weight: 600; }
+    footer { text-align: center; color: var(--suave); font-size: .8rem; padding: 12px 0 18px; }
+    .solo-lectores { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    @media (max-width: 480px) {
+      #consejo { display: none; }
+    }
+    @media (max-width: 600px) {
+      header { flex-wrap: wrap; }
+      .mensaje { max-width: 100%; }
+      form { flex-direction: column; align-items: stretch; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Registro de Contratos Vigentes</h1>
-  <p>En construcción</p>
+  <div class="app">
+    <header>
+      <div class="marca">
+        <img src="/logo.jpg" alt="Periferia IT Group" width="85" height="44">
+        <div>
+          <h1>Registro de Contratos Vigentes</h1>
+          <div id="proveedor">Conectando…</div>
+        </div>
+      </div>
+      <button id="reiniciar" type="button" title="Borra lo procesado y deja el buzón como al inicio" aria-label="Reiniciar demo: borra lo procesado y deja el buzón como al inicio">Reiniciar demo</button>
+    </header>
+
+    <main>
+      <div id="aviso" role="status" hidden></div>
+      <section id="vacio" aria-labelledby="titulo-guia">
+        <h2 id="titulo-guia">Cómo usar esta demo</h2>
+        <ol class="guia">
+          <li>Pulsa <strong>Reiniciar demo</strong> para empezar con el buzón completo (6 correos sin procesar).</li>
+          <li>Elige una de las opciones de abajo o escribe tu propia instrucción en el chat.</li>
+          <li>Si el agente encuentra datos dudosos, te pedirá confirmación antes de registrarlos: revisa los valores y confirma o corrige escribiendo en el chat.</li>
+        </ol>
+        <p class="nota"><strong>Qué verás:</strong> debajo de cada respuesta puedes abrir 🔧 para ver las herramientas que usó el agente, con sus datos y resultados.</p>        <div id="sugerencias"></div>
+      </section>
+      <div id="mensajes" aria-live="polite" aria-relevant="additions"></div>
+      <div id="trabajando" hidden>El agente está trabajando<span class="punto">.</span><span class="punto">.</span><span class="punto">.</span></div>
+    </main>
+
+    <div class="composer">
+      <div id="banner" role="status" hidden>
+        <span>El agente necesita tu confirmación antes de registrar. Revisa los valores y responde.</span>
+        <button id="confirmar" type="button" class="primario" aria-label="Confirmar los valores mostrados por el agente">Confirmar valores mostrados</button>
+      </div>
+      <p id="consejo">Consejo: puedes escribir instrucciones como 'procesa el buzón' o 'muéstrame las alertas con fecha 2026-09-03'.</p>
+      <form id="formulario">
+        <label for="entrada" class="solo-lectores">Mensaje para el agente</label>
+        <textarea id="entrada" rows="2" placeholder="Escribe tu mensaje… (Enter envía, Shift+Enter nueva línea)"></textarea>
+        <button id="enviar" type="submit" class="primario" aria-label="Enviar mensaje">Enviar</button>
+      </form>
+      <div id="contador">0 / 2000</div>
+    </div>
+
+    <footer>Demo técnica · Periferia IT Group · los datos son ficticios</footer>
+  </div>
+
+  <script type="module">
+    import { renderizarMarkdown } from "./markdown.js"
+
+    const MAX_CARACTERES = 2000
+    const MAX_ARGUMENTOS = 3000
+    const ERROR_RED = "No pude comunicarme con el servidor. Revisa tu conexión e intenta de nuevo."
+    const SUGERENCIAS = [
+      "Procesa el buzón de contratos con fecha de hoy 2026-09-03. Registra lo que esté limpio, muéstrame lo que requiere revisión campo por campo y termina con el reporte de alertas. No registres nada dudoso sin preguntarme.",
+      "Muéstrame las alertas con fecha 2026-09-03.",
+    ]
+
+    const $ = (id) => document.getElementById(id)
+    const entrada = $("entrada")
+    let sessionId = crypto.randomUUID()
+    let ocupado = false
+    /** true solo si la ÚLTIMA respuesta del servidor trajo needsConfirmation: true (CA3). */
+    let confirmacionPendiente = false
+
+    /** Baja al final de la conversación después de pintar, para que se vea la respuesta completa con sus herramientas. */
+    function desplazar() {
+      requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }))
+    }
+
+    /** Crea una burbuja de mensaje con la clase dada. */
+    function crearBurbuja(clase) {
+      const burbuja = document.createElement("div")
+      burbuja.className = `mensaje ${clase}`
+      $("mensajes").append(burbuja)
+      return burbuja
+    }
+
+    /** Mensaje de la analista: SIEMPRE con textContent, nunca innerHTML. */
+    function mostrarUsuario(texto) {
+      crearBurbuja("usuario").textContent = texto
+    }
+
+    /** Error en lenguaje claro dentro del chat; el chat sigue usable (CA5). */
+    function mostrarError(texto) {
+      crearBurbuja("error").textContent = texto
+    }
+
+    /** Fila de una llamada a herramienta: ícono, nombre, resumen y argumentos en JSON (CA4). */
+    function filaLlamada(llamada) {
+      const fila = document.createElement("div")
+      fila.className = "llamada"
+      const icono = document.createElement("span")
+      icono.textContent = llamada.bloqueada ? "⛔" : llamada.ok ? "✅" : "❌"
+      icono.setAttribute("aria-label", llamada.bloqueada ? "bloqueada" : llamada.ok ? "correcta" : "con error")
+      const nombre = document.createElement("code")
+      nombre.textContent = llamada.nombre
+      const resumen = document.createElement("span")
+      resumen.textContent = llamada.resumen
+      const argumentos = document.createElement("details")
+      const titulo = document.createElement("summary")
+      titulo.textContent = "Argumentos"
+      const pre = document.createElement("pre")
+      const json = JSON.stringify(llamada.argumentos, null, 2)
+      pre.textContent = json.length > MAX_ARGUMENTOS ? `${json.slice(0, MAX_ARGUMENTOS)}\n… (recortado)` : json
+      argumentos.append(titulo, pre)
+      fila.append(icono, nombre, resumen, argumentos)
+      return fila
+    }
+
+    /** Desplegable con las herramientas usadas en el turno (6.1: cada llamada visible). */
+    function detallesHerramientas(llamadas) {
+      const detalles = document.createElement("details")
+      detalles.className = "herramientas"
+      const resumen = document.createElement("summary")
+      resumen.textContent = `🔧 ${llamadas.length} ${llamadas.length === 1 ? "herramienta usada" : "herramientas usadas"}`
+      detalles.append(resumen, ...llamadas.map(filaLlamada))
+      return detalles
+    }
+
+    /** Respuesta del agente: Markdown seguro (escapado antes de convertir) y, si pide confirmación, borde amarillo (CA3). */
+    function mostrarAsistente(respuesta) {
+      const burbuja = crearBurbuja(respuesta.needsConfirmation ? "asistente confirmacion" : "asistente")
+      const contenido = document.createElement("div")
+      contenido.className = "contenido"
+      contenido.innerHTML = renderizarMarkdown(respuesta.reply)
+      burbuja.append(contenido)
+      if (Array.isArray(respuesta.toolCalls) && respuesta.toolCalls.length > 0) burbuja.append(detallesHerramientas(respuesta.toolCalls))
+    }
+
+    /** Mensaje de error según el código HTTP, sin detalles técnicos. */
+    function mensajeDeError(status, datos) {
+      if (status === 409) return "Espera a que termine la respuesta anterior."
+      if ([400, 413, 503].includes(status) && typeof datos?.error === "string") return datos.error
+      if (status >= 500) return "El servidor tuvo un problema. Intenta de nuevo en un momento."
+      return ERROR_RED
+    }
+
+    /** Visibilidad del banner: solo con una confirmación pendiente y mientras el agente NO está trabajando (CA3). */
+    function pintarBanner() {
+      $("banner").hidden = !confirmacionPendiente || ocupado
+    }
+
+    /** Guarda si la última respuesta pide confirmación y actualiza el banner. */
+    function actualizarBanner(necesita) {
+      confirmacionPendiente = necesita
+      pintarBanner()
+    }
+
+    /** Botón "Confirmar valores mostrados": solo envía si de verdad hay una confirmación pendiente (defensa doble). */
+    function confirmarValores() {
+      if (!confirmacionPendiente || ocupado) return
+      confirmacionPendiente = false
+      enviar("Confirmo los valores mostrados.")
+    }
+
+    /** Cantidad de caracteres del campo; si pasa del máximo, bloquea el envío. */
+    function actualizarContador() {
+      const largo = entrada.value.length
+      const contador = $("contador")
+      contador.textContent = `${largo} / ${MAX_CARACTERES}`
+      contador.classList.toggle("excedido", largo > MAX_CARACTERES)
+      $("enviar").disabled = ocupado || largo > MAX_CARACTERES
+    }
+
+    /** Estado "trabajando": indicador visible y controles deshabilitados durante el turno. */
+    function ponerOcupado(valor) {
+      ocupado = valor
+      $("trabajando").hidden = !valor
+      entrada.disabled = valor
+      for (const boton of document.querySelectorAll("#confirmar, #reiniciar, #sugerencias button")) boton.disabled = valor
+      pintarBanner()
+      actualizarContador()
+    }
+
+    /** Envía un mensaje al agente y muestra la respuesta o el error. */
+    async function enviar(texto) {
+      const mensaje = texto.trim()
+      if (!mensaje || ocupado || mensaje.length > MAX_CARACTERES) return
+      $("vacio").hidden = true
+      mostrarUsuario(mensaje)
+      entrada.value = ""
+      ponerOcupado(true)
+      desplazar()
+      try {
+        const respuesta = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, message: mensaje }),
+        })
+        const datos = await respuesta.json().catch(() => null)
+        if (respuesta.ok && typeof datos?.reply === "string") {
+          mostrarAsistente(datos)
+          actualizarBanner(datos.needsConfirmation === true)
+        } else {
+          mostrarError(mensajeDeError(respuesta.status, datos))
+        }
+      } catch {
+        mostrarError(ERROR_RED)
+      } finally {
+        ponerOcupado(false)
+        entrada.focus()
+        desplazar()
+      }
+    }
+
+    let temporizadorAviso = 0
+
+    /** Aviso breve arriba de la conversación, que desaparece solo a los pocos segundos. */
+    function mostrarAviso(texto) {
+      const aviso = $("aviso")
+      aviso.textContent = texto
+      aviso.hidden = false
+      clearTimeout(temporizadorAviso)
+      temporizadorAviso = setTimeout(() => { aviso.hidden = true }, 5000)
+    }
+
+    /** Reinicia la demo: borra out/ y las sesiones en el servidor, limpia la pantalla y crea una sesión nueva. */
+    async function reiniciar() {
+      if (ocupado || !confirm("¿Reiniciar la demo? Se borrarán los registros generados y la conversación.")) return
+      try {
+        const respuesta = await fetch("/api/reset", { method: "POST" })
+        if (!respuesta.ok) return mostrarError("No se pudo reiniciar la demo. Intenta de nuevo.")
+        $("mensajes").replaceChildren()
+        $("vacio").hidden = false
+        actualizarBanner(false)
+        sessionId = crypto.randomUUID()
+        mostrarAviso("Demo reiniciada: el buzón tiene de nuevo los 6 correos.")
+        entrada.focus()
+      } catch {
+        mostrarError(ERROR_RED)
+      }
+    }
+
+    /** Muestra proveedor y modelo desde /api/health (sin claves). */
+    async function cargarProveedor() {
+      try {
+        const datos = await (await fetch("/api/health")).json()
+        $("proveedor").textContent = `Modelo: ${datos.provider} · ${datos.model}`
+      } catch {
+        $("proveedor").textContent = "Modelo: sin conexión con el servidor"
+      }
+    }
+
+    for (const texto of SUGERENCIAS) {
+      const boton = document.createElement("button")
+      boton.type = "button"
+      boton.textContent = texto
+      boton.setAttribute("aria-label", `Enviar sugerencia: ${texto}`)
+      boton.addEventListener("click", () => enviar(texto))
+      $("sugerencias").append(boton)
+    }
+
+    $("formulario").addEventListener("submit", (evento) => {
+      evento.preventDefault()
+      enviar(entrada.value)
+    })
+    entrada.addEventListener("keydown", (evento) => {
+      if (evento.key === "Enter" && !evento.shiftKey && !evento.isComposing) {
+        evento.preventDefault()
+        enviar(entrada.value)
+      }
+    })
+    entrada.addEventListener("input", actualizarContador)
+    $("confirmar").addEventListener("click", confirmarValores)
+    $("reiniciar").addEventListener("click", reiniciar)
+
+    cargarProveedor()
+    actualizarBanner(false)
+    actualizarContador()
+    entrada.focus()
+  </script>
 </body>
 </html>
