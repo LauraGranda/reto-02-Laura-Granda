@@ -1,6 +1,6 @@
 // Extracción determinista (regex/heurísticas) de campos del contrato con confianza por campo (HU-2).
 import { esFechaValida, sumarMeses } from "./fechas"
-import { CONFIANZA, LARGO_MAXIMO_OBJETO, MONEDA_POR_PAIS, NIT_PERIFERIA } from "./reglas"
+import { CONFIANZA, LARGO_MAXIMO_OBJETO, MONEDA_POR_PAIS, NIT_PERIFERIA, UMBRAL_CONFIANZA } from "./reglas"
 import {
   esquemaContratoExtraido,
   MONEDAS,
@@ -486,12 +486,19 @@ function detectarAmpliacionGarantias(doc: DocumentoAnalizado): boolean {
 
 // ── Función principal ──────────────────────────────────────────────────────
 
-/** Motivo de rechazo si el adjunto no empieza por CONTRATO u OTROSÍ (RN4), o null si es un contrato. */
-function motivoNoEsContrato(doc: DocumentoAnalizado): string | null {
-  const primeraLinea = doc.normalizado.slice(doc.encabezado.inicio, doc.encabezado.fin)
+/**
+ * Por qué un texto no es un contrato (RN4, regla A), como fragmento para "El adjunto <…>": "está vacío",
+ * "no es un contrato (parece una cotización)"… o null si su primera línea empieza por CONTRATO u OTROSÍ.
+ * Única fuente de esta regla: la usan la extracción y la lectura del buzón (HU-1).
+ */
+export function motivoNoEsContrato(texto: string): string | null {
+  const normalizado = normalizarParaBuscar(texto.normalize("NFC"))
+  if (normalizado.trim() === "") return "está vacío"
+  const { inicio, fin } = ubicarEncabezado(normalizado)
+  const primeraLinea = normalizado.slice(inicio, fin)
   if (/^(CONTRATO|OTROSI)\b/.test(primeraLinea)) return null
-  if (primeraLinea.startsWith("COTIZACION")) return "El adjunto no es un contrato (parece una cotización)"
-  return "El adjunto no es un contrato ni un otrosí"
+  if (primeraLinea.startsWith("COTIZACION")) return "no es un contrato (parece una cotización)"
+  return "no es un contrato ni un otrosí"
 }
 
 /** Junta todos los campos en un ContratoExtraido. */
@@ -519,6 +526,13 @@ function construirContrato(doc: DocumentoAnalizado, correo: { fecha: string }): 
   }
 }
 
+/** Nombres de los campos con confianza menor a UMBRAL_CONFIANZA, en el orden del contrato (RN5). */
+export function camposBajoUmbral(contrato: ContratoExtraido): string[] {
+  return Object.entries(contrato)
+    .filter(([, campo]) => typeof campo === "object" && campo.confianza < UMBRAL_CONFIANZA)
+    .map(([nombre]) => nombre)
+}
+
 /**
  * Extrae los datos del contrato con confianza por campo, solo con regex (HU-2). Nunca lanza:
  * adjunto vacío, no-contrato (RN4) o cualquier fallo se devuelve como { ok: false, error } legible (HU-6).
@@ -526,10 +540,9 @@ function construirContrato(doc: DocumentoAnalizado, correo: { fecha: string }): 
 export function extraerContrato(texto: string, correo: { fecha: string }): ResultadoHerramienta<ContratoExtraido> {
   try {
     const original = texto.normalize("NFC").replace(/\r\n/g, "\n")
-    if (original.trim() === "") return { ok: false, error: "El adjunto está vacío" }
+    const rechazo = motivoNoEsContrato(original)
+    if (rechazo) return { ok: false, error: `El adjunto ${rechazo}` }
     const doc = analizarDocumento(original)
-    const rechazo = motivoNoEsContrato(doc)
-    if (rechazo) return { ok: false, error: rechazo }
     const resultado = esquemaContratoExtraido.safeParse(construirContrato(doc, correo))
     if (resultado.success) return { ok: true, data: resultado.data }
     const problema = resultado.error.issues[0]
