@@ -1,10 +1,14 @@
 // Herramientas del agente (cada export → contratos_<export>); solo definiciones, la lógica vive en src/tools/dominio/.
 import { z } from "zod"
+import { calcularSecciones, generarReporteMarkdown } from "./dominio/alertas"
+import { escribirArchivoAtomico } from "./dominio/archivos"
 import { extraerContratoDelMensaje, leerCorreo, listarMensajesPendientes } from "./dominio/buzon"
 import { camposBajoUmbral } from "./dominio/extraccion"
 import { ejecutarConSeguridad, esquemaMensajeId, validarArgumentos, type Herramienta } from "./dominio/herramienta"
+import { leerHistorial, leerMaestro } from "./dominio/maestro"
 import { descartarMensaje, registrarMensaje } from "./dominio/registro"
-import { esquemaContratoExtraido } from "./dominio/tipos"
+import { rutaAlertas } from "./dominio/rutas"
+import { esquemaContratoExtraido, esquemaFecha } from "./dominio/tipos"
 import { validarMensaje } from "./dominio/validacion"
 
 const ARGS_EXTRAER = { mensaje_id: esquemaMensajeId }
@@ -26,6 +30,8 @@ const ARGS_REGISTRAR = {
     .optional()
     .describe("true solo si el usuario confirmó explícitamente los campos en revisión en su último mensaje"),
 }
+
+const ARGS_ALERTAS = { hoy: esquemaFecha.describe("Fecha de referencia en formato YYYY-MM-DD") }
 
 const ARGS_DESCARTAR = {
   mensaje_id: esquemaMensajeId,
@@ -117,6 +123,29 @@ export const descartar: Herramienta<typeof ARGS_DESCARTAR> = {
       const { mensaje_id, motivo } = validarArgumentos(ARGS_DESCARTAR, args)
       const data = await descartarMensaje(ctx, mensaje_id, motivo)
       return { data, resumen: `${data.clasificacion} descartado: ${motivo}` }
+    })
+  },
+}
+
+/**
+ * contratos_alertas (HU-5, O4): reporte para gerencia en out/alertas.md con contratos por vencer (≤ 60 días), pólizas
+ * no vigentes y registrados desde el corte, más dos secciones informativas. `hoy` es argumento para que sea determinista.
+ */
+export const alertas: Herramienta<typeof ARGS_ALERTAS> = {
+  description:
+    "Genera el reporte de alertas para gerencia con contratos por vencer, pólizas no vigentes y contratos registrados desde el corte.",
+  args: ARGS_ALERTAS,
+  async execute(args, ctx) {
+    return ejecutarConSeguridad("contratos_alertas", null, ctx, async () => {
+      const { hoy } = validarArgumentos(ARGS_ALERTAS, args)
+      const [filas, historial] = await Promise.all([leerMaestro(ctx), leerHistorial(ctx)])
+      const secciones = calcularSecciones(filas, historial, hoy)
+      await escribirArchivoAtomico(rutaAlertas(ctx.directory), generarReporteMarkdown(secciones, hoy))
+      const { vencen, polizas_pendientes, registrados_desde_corte } = secciones
+      return {
+        data: { ruta: "out/alertas.md", ...secciones },
+        resumen: `hoy ${hoy}: ${vencen.length} vencen, ${polizas_pendientes.length} pólizas, ${registrados_desde_corte.length} registrados`,
+      }
     })
   },
 }
