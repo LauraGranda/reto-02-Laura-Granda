@@ -1,0 +1,24 @@
+{
+  "name": "reto-02-laura-granda",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "start": "bun run src/server.ts",
+    "demo": "bun run demo.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "modulo": "bun run scripts/generar-modulo.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@google/genai": "^2.24.0",
+    "papaparse": "^5.7.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/papaparse": "^5.5.2",
+    "typescript": "^7.0.2"
+  }
+}
