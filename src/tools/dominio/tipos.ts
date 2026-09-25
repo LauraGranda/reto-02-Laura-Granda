@@ -137,6 +137,10 @@ export type MensajeBuzon = z.infer<typeof esquemaMensajeBuzon>
 
 // ── Validación (6.2 contratos_validar, HU-3) ───────────────────────────────
 
+/** Cambios campo a campo `{ campo: { antes, despues } }`; lo usan validar (RN2) y el historial (HU-4). */
+export const esquemaDiferencias = z.record(z.string(), z.object({ antes: z.string(), despues: z.string() }))
+export type Diferencias = z.infer<typeof esquemaDiferencias>
+
 /**
  * Salida de `contratos_validar` (HU-3): clasificación RN1–RN4, campos en revisión (RN5),
  * diferencias contra el maestro y el comercial resuelto desde comerciales.json.
@@ -145,7 +149,7 @@ export const esquemaResultadoValidacion = z.object({
   clasificacion: esquemaClasificacion,
   id_contrato_existente: z.string().nullable(),
   requiere_revision: z.array(z.string()),
-  diferencias: z.record(z.string(), z.object({ antes: z.string(), despues: z.string() })),
+  diferencias: esquemaDiferencias,
   comercial: z.object({
     email: z.string(),
     nombre: z.string().nullable(),
@@ -154,6 +158,49 @@ export const esquemaResultadoValidacion = z.object({
   motivo: z.string().nullable(),
 })
 export type ResultadoValidacion = z.infer<typeof esquemaResultadoValidacion>
+
+// ── Archivos de apoyo (7.1, HU-4, RN7) ─────────────────────────────────────
+
+/** Un comercial de fixtures/reto-02/comerciales.json (7.1); se usa para resolver el remitente (HU-3). */
+export const esquemaComercial = z.object({
+  email: z.string(),
+  nombre: z.string(),
+  region: z.string(),
+})
+export type Comercial = z.infer<typeof esquemaComercial>
+
+/** Estado de un mensaje en out/procesados.json (HU-1, HU-4); un mensaje presente ya no se lista en el buzón. */
+export const esquemaRegistroProcesado = z.object({
+  clasificacion: esquemaClasificacion,
+  accion: z.string(),
+  ts: z.string(),
+})
+export type RegistroProcesado = z.infer<typeof esquemaRegistroProcesado>
+
+/** Contenido completo de out/procesados.json: `{ [mensaje_id]: RegistroProcesado }`. */
+export const esquemaProcesados = z.record(z.string(), esquemaRegistroProcesado)
+export type Procesados = z.infer<typeof esquemaProcesados>
+
+/** Una línea de out/sharepoint/historial.jsonl (HU-4, RN2); confirmado_por queda cuando hubo confirmación humana. */
+export const esquemaEntradaHistorial = z.object({
+  ts: z.string(),
+  id_contrato: z.string(),
+  accion: z.string(),
+  cambios: esquemaDiferencias,
+  mensaje_id: z.string(),
+  confirmado_por: z.string().optional(),
+})
+export type EntradaHistorial = z.infer<typeof esquemaEntradaHistorial>
+
+/** Una línea de out/log.jsonl que deja cada herramienta (RN7, CA4). */
+export const esquemaEntradaLog = z.object({
+  ts: z.string(),
+  herramienta: z.string(),
+  mensaje_id: z.string().nullable(),
+  ok: z.boolean(),
+  resumen: z.string(),
+})
+export type EntradaLog = z.infer<typeof esquemaEntradaLog>
 
 // ── Contrato de herramientas (6.2) ─────────────────────────────────────────
 
