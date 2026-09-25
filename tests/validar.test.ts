@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { buscarHerramienta } from "../src/agent/herramientas"
 import { extraer, validar } from "../src/tools/contratos"
 import { similitudObjeto, validarContrato } from "../src/tools/dominio/clasificacion"
 import { escribirMaestro, leerMaestro } from "../src/tools/dominio/maestro"
@@ -159,6 +160,62 @@ describe("similitud de objeto (RN2)", () => {
       const contrato = await extraerContratoDe(mensajeId)
       expect(similitudObjeto(objetoMaestro, contrato.objeto.valor ?? "")).toBeLessThan(0.9)
     }
+  })
+})
+
+describe("esquema tolerante: el modelo omite las claves null al copiar el contrato", () => {
+  /** Copia del contrato sin las claves cuyo valor es null (como lo envió Gemini en la prueba real). */
+  function sinNulos(contrato: ContratoExtraido): Record<string, unknown> {
+    return Object.fromEntries(
+      Object.entries(contrato).map(([clave, campo]) => [
+        clave,
+        typeof campo === "object" ? Object.fromEntries(Object.entries(campo).filter(([, valor]) => valor !== null)) : campo,
+      ]),
+    )
+  }
+
+  /** Ejecuta una herramienta por el registro del agente (argumentos sin tipar, igual que desde el modelo). */
+  async function ejecutarComoModelo(nombre: string, args: unknown, contexto: ContextoHerramienta): Promise<unknown> {
+    const herramienta = buscarHerramienta(nombre)
+    if (!herramienta) throw new Error(`falta ${nombre}`)
+    return JSON.parse(await herramienta.ejecutar(args, contexto))
+  }
+
+  test("validar da el mismo resultado con y sin las claves null (msg-002 y otrosí msg-003)", async () => {
+    for (const mensajeId of ["msg-002", "msg-003"]) {
+      const contrato = await extraerContratoDe(mensajeId)
+      const recortado = sinNulos(contrato)
+      expect(JSON.stringify(recortado)).not.toContain("null")
+      const completo = await ejecutarComoModelo("contratos_validar", { mensaje_id: mensajeId, contrato }, ctx)
+      const tolerado = await ejecutarComoModelo("contratos_validar", { mensaje_id: mensajeId, contrato: recortado }, ctx)
+      expect(tolerado).toMatchObject({ ok: true })
+      expect(tolerado).toEqual(completo)
+    }
+  })
+
+  test("registrar da el mismo resultado con y sin las claves null (en copias separadas)", async () => {
+    const otra = await mkdtemp(path.join(os.tmpdir(), "reto02-tolerante-"))
+    await cp(FIXTURES_REALES, path.join(otra, "fixtures", "reto-02"), { recursive: true })
+    const ctxOtra: ContextoHerramienta = { directory: otra, sessionId: "test" }
+    try {
+      for (const mensajeId of ["msg-002", "msg-003"]) {
+        const contrato = await extraerContratoDe(mensajeId)
+        const completo = await ejecutarComoModelo("contratos_registrar", { mensaje_id: mensajeId, contrato }, ctx)
+        const tolerado = await ejecutarComoModelo("contratos_registrar", { mensaje_id: mensajeId, contrato: sinNulos(contrato) }, ctxOtra)
+        expect(tolerado).toMatchObject({ ok: true })
+        expect(tolerado).toEqual(completo)
+      }
+      expect(await leerMaestro(ctxOtra)).toEqual(await leerMaestro(ctx))
+    } finally {
+      await rm(otra, { recursive: true, force: true })
+    }
+  })
+
+  test("la confianza sigue siendo obligatoria", async () => {
+    const contrato = await extraerContratoDe("msg-002")
+    const sinConfianza = { ...contrato, valor: { valor: contrato.valor.valor } }
+    const resultado = await ejecutarComoModelo("contratos_validar", { mensaje_id: "msg-002", contrato: sinConfianza }, ctx)
+    expect(resultado).toMatchObject({ ok: false })
   })
 })
 

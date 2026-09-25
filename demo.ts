@@ -1,12 +1,12 @@
 // Demo sin modelo (PRD 6.6): procesa el buzón llamando directamente a las herramientas, sin clave de ningún proveedor.
-import { readFile, rm } from "node:fs/promises"
-import path from "node:path"
+import { readFile } from "node:fs/promises"
 import { z } from "zod"
 import { alertas, descartar, extraer, leer_buzon, registrar, validar } from "./src/tools/contratos"
 import type { Herramienta } from "./src/tools/dominio/herramienta"
 import { leerMaestro } from "./src/tools/dominio/maestro"
 import { FECHA_CORTE_MAESTRO } from "./src/tools/dominio/reglas"
-import { carpetaSalida, rutaMaestroFixture } from "./src/tools/dominio/rutas"
+import { reiniciarSalida } from "./src/tools/dominio/registro"
+import { rutaMaestroFixture } from "./src/tools/dominio/rutas"
 import {
   ACCIONES_REGISTRO,
   esquemaClasificacion,
@@ -104,13 +104,6 @@ export async function llamarHerramienta<Args extends z.ZodRawShape, T>(
 }
 
 // ── Primera pasada ─────────────────────────────────────────────────────────
-
-/** Borra out/ del proyecto para empezar limpio (PRD 8); se niega si la ruta no termina en "out". */
-async function limpiarSalida(ctx: ContextoHerramienta): Promise<void> {
-  const carpeta = carpetaSalida(ctx.directory)
-  if (path.basename(carpeta) !== "out") throw new Error(`Se esperaba una carpeta "out" y se obtuvo ${carpeta}; no se borra nada`)
-  await rm(carpeta, { recursive: true, force: true })
-}
 
 /** Fila de error: la demo reporta el problema y sigue con el siguiente mensaje (HU-6). */
 function filaError(mensajeId: string, clasificacion: string, error: string): FilaResumen {
@@ -289,7 +282,7 @@ function formatearSalida(resumen: Omit<ResumenDemo, "lineas">, fecha: string): s
  */
 export async function ejecutarDemo(ctx: ContextoHerramienta): Promise<ResumenDemo> {
   const fixtureInicial = await readFile(rutaMaestroFixture(ctx.directory), "utf8")
-  await limpiarSalida(ctx)
+  await reiniciarSalida(ctx)
   const { filas, pendientes, avisos } = await primeraPasada(ctx)
   const confirmaciones = await confirmarPendientes(ctx, pendientes)
   const resumenAlertas = await resumirAlertas(ctx)

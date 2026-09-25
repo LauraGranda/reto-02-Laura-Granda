@@ -5,7 +5,8 @@ import type { EntradaHistorial, FilaMaestro } from "./tipos"
 
 // ── Tipos de salida ────────────────────────────────────────────────────────
 
-type Base = { id_contrato: string; cliente: string }
+/** Campos comunes: id, cliente y el valor ya formateado como en el reporte (el modelo lo muestra tal cual). */
+type Base = { id_contrato: string; cliente: string; valor_formateado: string }
 
 /** Contrato que vence en ≤ 60 días (HU-5, sección 1). */
 export type PorVencer = Base & Pick<FilaMaestro, "fecha_fin" | "valor" | "moneda" | "estado_poliza" | "comercial"> & { dias_restantes: number }
@@ -62,7 +63,7 @@ export function contratosPorVencer(filas: FilaMaestro[], hoy: string): PorVencer
     .filter(({ dias }) => dias >= 0 && dias <= DIAS_ALERTA_VENCIMIENTO)
     .sort((a, b) => a.dias - b.dias || compararTexto(a.fila.id_contrato, b.fila.id_contrato))
     .map(({ fila, dias }) => ({
-      id_contrato: fila.id_contrato, cliente: fila.cliente, fecha_fin: fila.fecha_fin, dias_restantes: dias,
+      id_contrato: fila.id_contrato, cliente: fila.cliente, valor_formateado: formatearValor(fila.valor, fila.moneda), fecha_fin: fila.fecha_fin, dias_restantes: dias,
       valor: fila.valor, moneda: fila.moneda, estado_poliza: fila.estado_poliza, comercial: fila.comercial,
     }))
 }
@@ -74,7 +75,7 @@ export function contratosVencidos(filas: FilaMaestro[], hoy: string): Vencido[] 
     .filter(({ dias }) => dias > 0)
     .sort((a, b) => b.dias - a.dias || compararTexto(a.fila.id_contrato, b.fila.id_contrato))
     .map(({ fila, dias }) => ({
-      id_contrato: fila.id_contrato, cliente: fila.cliente, fecha_fin: fila.fecha_fin, dias_vencido: dias,
+      id_contrato: fila.id_contrato, cliente: fila.cliente, valor_formateado: formatearValor(fila.valor, fila.moneda), fecha_fin: fila.fecha_fin, dias_vencido: dias,
       valor: fila.valor, moneda: fila.moneda, estado_poliza: fila.estado_poliza, comercial: fila.comercial,
     }))
 }
@@ -85,7 +86,7 @@ export function polizasPendientes(filas: FilaMaestro[]): PolizaPendiente[] {
     .filter((fila) => fila.requiere_poliza && fila.estado_poliza !== "vigente")
     .sort((a, b) => compararTexto(a.id_contrato, b.id_contrato))
     .map((fila) => ({
-      id_contrato: fila.id_contrato, cliente: fila.cliente, tipo_poliza: fila.tipo_poliza,
+      id_contrato: fila.id_contrato, cliente: fila.cliente, valor_formateado: formatearValor(fila.valor, fila.moneda), tipo_poliza: fila.tipo_poliza,
       estado_poliza: fila.estado_poliza, fecha_fin: fila.fecha_fin, comercial: fila.comercial,
     }))
 }
@@ -96,7 +97,7 @@ export function registradosDesdeCorte(filas: FilaMaestro[]): RegistradoDesdeCort
     .filter((fila) => fila.fecha_registro >= FECHA_CORTE_MAESTRO)
     .sort((a, b) => compararTexto(a.fecha_registro, b.fecha_registro) || compararTexto(a.id_contrato, b.id_contrato))
     .map((fila) => ({
-      id_contrato: fila.id_contrato, cliente: fila.cliente, fecha_registro: fila.fecha_registro,
+      id_contrato: fila.id_contrato, cliente: fila.cliente, valor_formateado: formatearValor(fila.valor, fila.moneda), fecha_registro: fila.fecha_registro,
       valor: fila.valor, moneda: fila.moneda, estado_poliza: fila.estado_poliza, comercial: fila.comercial,
     }))
 }
@@ -117,7 +118,8 @@ export function actualizadosDesdeCorte(historial: EntradaHistorial[], filas: Fil
     .sort(([a], [b]) => compararTexto(a, b))
     .map(([id, cambiados]) => {
       const fila = filas.find((candidata) => candidata.id_contrato === id)
-      return { id_contrato: id, cliente: fila?.cliente ?? "", campos_cambiados: [...cambiados], fecha_fin: fila?.fecha_fin ?? "" }
+      const valorFormateado = fila ? formatearValor(fila.valor, fila.moneda) : ""
+      return { id_contrato: id, cliente: fila?.cliente ?? "", valor_formateado: valorFormateado, campos_cambiados: [...cambiados], fecha_fin: fila?.fecha_fin ?? "" }
     })
 }
 

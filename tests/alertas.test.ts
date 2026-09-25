@@ -91,9 +91,13 @@ describe("tras procesar el buzón completo", () => {
     expect(datos.polizas_pendientes.map((c) => c.id_contrato)).toEqual(["CM-2026-03", "CT-2026-004", "CT-2026-011", "CT-2026-015"])
     expect(datos.registrados_desde_corte.map((c) => c.id_contrato)).toEqual(["CM-2026-03", "CT-2026-015", "CT-2026-016"])
     expect(datos.actualizados_desde_corte).toEqual([
-      { id_contrato: "CT-2026-011", cliente: "Minera Los Andes S.A.C.", campos_cambiados: ["valor", "fecha_fin", "estado_poliza"], fecha_fin: "2027-11-01" },
+      { id_contrato: "CT-2026-011", cliente: "Minera Los Andes S.A.C.", valor_formateado: "PEN 520.000", campos_cambiados: ["valor", "fecha_fin", "estado_poliza"], fecha_fin: "2027-11-01" },
     ])
     expect(datos.vencen.map((c) => c.id_contrato)).toEqual(["CT-2026-009", "CT-2026-004"])
+    // Cada contrato trae el valor ya formateado como en el reporte, para que el modelo no lo reformatee
+    expect(datos.registrados_desde_corte.find((c) => c.id_contrato === "CT-2026-015")?.valor_formateado).toBe("COP 265.000.000")
+    expect(datos.polizas_pendientes.find((c) => c.id_contrato === "CT-2026-004")?.valor_formateado).toBe("USD 180.000")
+    expect(datos.vencen.map((c) => c.valor_formateado)).toEqual(["USD 60.000", "USD 180.000"])
   })
 
   test("dos ejecuciones con la misma fecha dan el mismo alertas.md y no cambian el maestro", async () => {
@@ -128,7 +132,7 @@ describe("bordes y formato", () => {
   test("el reporte escapa '|' en las celdas", () => {
     const secciones: SeccionesAlertas = {
       vencen: [], registrados_desde_corte: [], ya_vencidos: [], actualizados_desde_corte: [],
-      polizas_pendientes: [{ id_contrato: "X", cliente: "A|B", tipo_poliza: "", estado_poliza: "pendiente", fecha_fin: HOY, comercial: "" }],
+      polizas_pendientes: [{ id_contrato: "X", cliente: "A|B", valor_formateado: "COP 1", tipo_poliza: "", estado_poliza: "pendiente", fecha_fin: HOY, comercial: "" }],
     }
     expect(generarReporteMarkdown(secciones, HOY)).toContain("| X | A\\|B |")
   })
