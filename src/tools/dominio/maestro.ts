@@ -1,11 +1,10 @@
 // Lectura/escritura del maestro CSV en out/sharepoint/, archivo del contrato e historial.jsonl (HU-4, RN6).
-import { appendFile, copyFile, mkdir, writeFile } from "node:fs/promises"
+import { appendFile, copyFile, mkdir } from "node:fs/promises"
 import path from "node:path"
 import Papa from "papaparse"
 import { z } from "zod"
-import { existeArchivo, leerTextoUtf8 } from "./archivos"
+import { escribirArchivoAtomico, existeArchivo, leerTextoUtf8 } from "./archivos"
 import {
-  carpetaSalida,
   carpetaSharepoint,
   rutaComerciales,
   rutaHistorial,
@@ -62,11 +61,10 @@ export async function leerMaestro(ctx: ContextoHerramienta): Promise<FilaMaestro
   return data.map((registro, indice) => convertirFilaCsv(registro, indice + 2))
 }
 
-/** Escribe el maestro con las columnas de 7.2 en el orden exacto del fixture y saltos \n (HU-4). */
+/** Escribe el maestro con las columnas de 7.2 en el orden exacto del fixture y saltos \n, de forma atómica (HU-4, O2). */
 export async function escribirMaestro(ctx: ContextoHerramienta, filas: FilaMaestro[]): Promise<void> {
   const csv = Papa.unparse(filas, { columns: [...COLUMNAS_MAESTRO], newline: "\n" })
-  await mkdir(carpetaSharepoint(ctx.directory), { recursive: true })
-  await writeFile(rutaMaestroSalida(ctx.directory), csv + "\n", "utf8")
+  await escribirArchivoAtomico(rutaMaestroSalida(ctx.directory), csv + "\n")
 }
 
 /** Lee out/procesados.json; vacío si aún no existe. Los mensajes presentes no se relistan (HU-1). */
@@ -84,8 +82,7 @@ export async function marcarProcesado(
 ): Promise<void> {
   const procesados = await leerProcesados(ctx)
   procesados[mensajeId] = { ...estado, ts: new Date().toISOString() }
-  await mkdir(carpetaSalida(ctx.directory), { recursive: true })
-  await writeFile(rutaProcesados(ctx.directory), JSON.stringify(procesados, null, 2) + "\n", "utf8")
+  await escribirArchivoAtomico(rutaProcesados(ctx.directory), JSON.stringify(procesados, null, 2) + "\n")
 }
 
 /** Agrega una línea a out/sharepoint/historial.jsonl con ts actual (HU-4, RN2). */

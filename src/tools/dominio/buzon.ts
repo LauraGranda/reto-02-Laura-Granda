@@ -1,7 +1,7 @@
 // Lectura del buzón simulado: mensajes, correo.json y adjuntos (HU-1, 7.1). Solo lectura sobre fixtures/.
 import { readdir } from "node:fs/promises"
 import path from "node:path"
-import { existeArchivo, leerTextoUtf8 } from "./archivos"
+import { esNombreSimple, existeArchivo, leerTextoUtf8 } from "./archivos"
 import { extraerContrato, motivoNoEsContrato } from "./extraccion"
 import { leerProcesados } from "./maestro"
 import { carpetaBuzon, carpetaMensaje } from "./rutas"
@@ -19,11 +19,6 @@ export type AdjuntoLeido = { nombre: string; texto: string }
 
 /** Resultado de revisar los adjuntos de un correo: el contrato encontrado o el motivo de rechazo (RN4). */
 export type EvaluacionAdjuntos = { adjunto: AdjuntoLeido; motivo: null } | { adjunto: null; motivo: string }
-
-/** Nombre de archivo simple, sin separadores ni "..": evita salir de la carpeta del mensaje (seguridad). */
-function esNombreSimple(nombre: string): boolean {
-  return nombre !== "" && !nombre.includes("..") && !/[\\/]/.test(nombre) && path.basename(nombre) === nombre
-}
 
 /** Ids de los mensajes del buzón (subcarpetas de fixtures/reto-02/buzon), ordenados (HU-1). */
 export async function listarIdsMensajes(ctx: ContextoHerramienta): Promise<string[]> {

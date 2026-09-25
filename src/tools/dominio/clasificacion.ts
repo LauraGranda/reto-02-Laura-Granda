@@ -5,6 +5,7 @@ import {
   esquemaContratoExtraido,
   type Clasificacion,
   type ContratoExtraido,
+  type Correcciones,
   type Diferencias,
   type FilaMaestro,
   type ResultadoValidacion,
@@ -108,12 +109,17 @@ function ordenarCampos(campos: string[]): string[] {
  * Compara el contrato recibido del modelo con una nueva extracción del adjunto (HU-2, CA2). Cada valor distinto
  * se reporta con ambos valores y va a revisión; las confianzas y evidencias SIEMPRE son las de la extracción.
  */
-export function compararConExtraccion(recibido: ContratoExtraido, extraido: ContratoExtraido): Hallazgos & { evaluado: ContratoExtraido } {
+export function compararConExtraccion(
+  recibido: ContratoExtraido,
+  extraido: ContratoExtraido,
+): Hallazgos & { evaluado: ContratoExtraido; correcciones: Correcciones } {
   const hallazgos: Hallazgos = { conflictos: [], campos: [] }
+  const correcciones: Correcciones = {}
   const registrarSiDifiere = (campo: string, valorRecibido: string, valorExtraido: string) => {
     if (valorRecibido === valorExtraido) return
     hallazgos.conflictos.push(`${campo}: recibido ${valorRecibido || "(vacío)"} ≠ extraído ${valorExtraido || "(vacío)"}`)
     hallazgos.campos.push(campo)
+    correcciones[campo] = { extraido: valorExtraido, final: valorRecibido }
   }
   for (const campo of CAMPOS_CON_CONFIANZA) registrarSiDifiere(campo, aTexto(recibido[campo].valor), aTexto(extraido[campo].valor))
   for (const bandera of BANDERAS) registrarSiDifiere(bandera, aTexto(recibido[bandera]), aTexto(extraido[bandera]))
@@ -121,7 +127,7 @@ export function compararConExtraccion(recibido: ContratoExtraido, extraido: Cont
     CAMPOS_CON_CONFIANZA.map((campo) => [campo, { ...recibido[campo], confianza: extraido[campo].confianza, evidencia: extraido[campo].evidencia }]),
   )
   const evaluado = esquemaContratoExtraido.parse({ ...recibido, ...conConfianzaExtraida })
-  return { ...hallazgos, evaluado }
+  return { ...hallazgos, evaluado, correcciones }
 }
 
 // ── Comparación con el maestro (RN1, RN2) ──────────────────────────────────
@@ -272,8 +278,13 @@ export function calcularRequiereRevision(contrato: ContratoExtraido, clasificaci
 /**
  * Valida un contrato recibido (HU-3): lo compara con la re-extracción (CA2), lo clasifica (RN1–RN4), revisa consistencia
  * y arma requiere_revision (RN5) sin repetidos y en orden estable. Rechazado → sin campos a revisar.
+ * Devuelve además las correcciones { extraido, final } para el historial de registrar (HU-4).
  */
-export function validarContrato(entrada: { recibido: ContratoExtraido; extraido: ContratoExtraido; filas: FilaMaestro[] }): ResultadoContrato {
+export function validarContrato(entrada: {
+  recibido: ContratoExtraido
+  extraido: ContratoExtraido
+  filas: FilaMaestro[]
+}): ResultadoContrato & { correcciones: Correcciones } {
   const comparacion = compararConExtraccion(entrada.recibido, entrada.extraido)
   const contrato = comparacion.evaluado
   const clasificacion = clasificarContrato(contrato, entrada.filas)
@@ -291,6 +302,7 @@ export function validarContrato(entrada: { recibido: ContratoExtraido; extraido:
     conflictos: [...comparacion.conflictos, ...clasificacion.conflictos, ...consistencia.conflictos],
     diferencias: clasificacion.diferencias,
     motivo: clasificacion.motivo,
+    correcciones: comparacion.correcciones,
   }
 }
 

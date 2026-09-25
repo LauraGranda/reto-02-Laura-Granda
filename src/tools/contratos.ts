@@ -1,11 +1,11 @@
 // Herramientas del agente (cada export → contratos_<export>); solo definiciones, la lógica vive en src/tools/dominio/.
+import { z } from "zod"
 import { extraerContratoDelMensaje, leerCorreo, listarMensajesPendientes } from "./dominio/buzon"
-import { rechazarSinExtraccion, validarContrato } from "./dominio/clasificacion"
-import { resolverComercial } from "./dominio/comerciales"
 import { camposBajoUmbral } from "./dominio/extraccion"
 import { ejecutarConSeguridad, esquemaMensajeId, validarArgumentos, type Herramienta } from "./dominio/herramienta"
-import { leerMaestro } from "./dominio/maestro"
-import { esquemaContratoExtraido, type ResultadoValidacion } from "./dominio/tipos"
+import { descartarMensaje, registrarMensaje } from "./dominio/registro"
+import { esquemaContratoExtraido } from "./dominio/tipos"
+import { validarMensaje } from "./dominio/validacion"
 
 const ARGS_EXTRAER = { mensaje_id: esquemaMensajeId }
 
@@ -14,6 +14,22 @@ const ARGS_VALIDAR = {
   contrato: esquemaContratoExtraido.describe(
     "Contrato tal como lo devolvió contratos_extraer (o con valores corregidos); se compara con una nueva extracción del adjunto",
   ),
+}
+
+const ARGS_REGISTRAR = {
+  mensaje_id: esquemaMensajeId,
+  contrato: esquemaContratoExtraido.describe(
+    "Contrato a registrar, el mismo que se validó; con confirmado=true sus valores se toman como la corrección humana",
+  ),
+  confirmado: z
+    .boolean()
+    .optional()
+    .describe("true solo si el usuario confirmó explícitamente los campos en revisión en su último mensaje"),
+}
+
+const ARGS_DESCARTAR = {
+  mensaje_id: esquemaMensajeId,
+  motivo: z.string().min(1).describe("Motivo legible por el que el mensaje no se registra (ej. es una cotización, ya existe)"),
 }
 
 /** mensaje_id recibido, solo si es texto, para dejarlo en el log aunque sea inválido (RN7). */
@@ -69,13 +85,38 @@ export const validar: Herramienta<typeof ARGS_VALIDAR> = {
   async execute(args, ctx) {
     return ejecutarConSeguridad("contratos_validar", idParaLog(args.mensaje_id), ctx, async () => {
       const { mensaje_id, contrato } = validarArgumentos(ARGS_VALIDAR, args)
-      const [filas, correo] = await Promise.all([leerMaestro(ctx), leerCorreo(ctx, mensaje_id)])
-      const extraccion = await extraerContratoDelMensaje(ctx, mensaje_id, correo)
-      const resultado = extraccion.ok
-        ? validarContrato({ recibido: contrato, extraido: extraccion.data.contrato, filas })
-        : rechazarSinExtraccion(extraccion.error)
-      const data: ResultadoValidacion = { ...resultado, comercial: await resolverComercial(ctx, correo.de) }
-      return { data, resumen: `${data.clasificacion}; revisión: ${data.requiere_revision.join(", ") || "ninguna"}` }
+      const { resultado } = await validarMensaje(ctx, mensaje_id, contrato)
+      return { data: resultado, resumen: `${resultado.clasificacion}; revisión: ${resultado.requiere_revision.join(", ") || "ninguna"}` }
+    })
+  },
+}
+
+/**
+ * contratos_registrar (HU-4): repite la validación completa (CA2), exige confirmado=true si hay campos en revisión (RN5),
+ * escribe maestro, archivo e historial según la clasificación y marca el mensaje como procesado.
+ */
+export const registrar: Herramienta<typeof ARGS_REGISTRAR> = {
+  description:
+    "Registra en el maestro un contrato ya validado y archiva el documento; si hay campos en revisión, solo escribe con confirmado=true.",
+  args: ARGS_REGISTRAR,
+  async execute(args, ctx) {
+    return ejecutarConSeguridad("contratos_registrar", idParaLog(args.mensaje_id), ctx, async () => {
+      const { mensaje_id, contrato, confirmado } = validarArgumentos(ARGS_REGISTRAR, args)
+      const data = await registrarMensaje(ctx, mensaje_id, contrato, confirmado === true)
+      return { data, resumen: `${data.id_contrato || "sin id"} ${data.accion}${confirmado ? " (confirmado)" : ""}` }
+    })
+  },
+}
+
+/** contratos_descartar (RN4, RN1): cierra un mensaje rechazado o duplicado sin tocar el maestro. */
+export const descartar: Herramienta<typeof ARGS_DESCARTAR> = {
+  description: "Marca como procesado un mensaje que no se registra (rechazado o duplicado) sin modificar el maestro.",
+  args: ARGS_DESCARTAR,
+  async execute(args, ctx) {
+    return ejecutarConSeguridad("contratos_descartar", idParaLog(args.mensaje_id), ctx, async () => {
+      const { mensaje_id, motivo } = validarArgumentos(ARGS_DESCARTAR, args)
+      const data = await descartarMensaje(ctx, mensaje_id, motivo)
+      return { data, resumen: `${data.clasificacion} descartado: ${motivo}` }
     })
   },
 }
