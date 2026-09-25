@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { diasEntre, esFechaValida, sumarDias, sumarMeses } from "../src/tools/dominio/fechas"
+import { diasEntre, esFechaValida, fechaDeRegistro, fechaHoyISO, sumarDias, sumarMeses } from "../src/tools/dominio/fechas"
 import {
   agregarHistorial,
   crearSlugCliente,
@@ -29,6 +29,12 @@ describe("fechas", () => {
     expect(diasEntre("2026-09-03", "2026-11-02")).toBe(60)
     expect(diasEntre("2026-11-02", "2026-09-03")).toBe(-60)
     expect(sumarDias("2026-09-03", 60)).toBe("2026-11-02")
+  })
+
+  test("fechaDeRegistro usa la fecha del contexto solo si es válida", () => {
+    expect(fechaDeRegistro({ fechaActual: "2026-09-03" })).toBe("2026-09-03")
+    expect(fechaDeRegistro({})).toBe(fechaHoyISO())
+    expect(fechaDeRegistro({ fechaActual: "2026-02-30" })).toBe(fechaHoyISO())
   })
 
   test("esFechaValida rechaza formatos y fechas imposibles", () => {

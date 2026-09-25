@@ -243,5 +243,7 @@ export type ResultadoHerramienta<T> = { ok: true; data: T } | { ok: false; error
 export const esquemaContextoHerramienta = z.object({
   directory: z.string(),
   sessionId: z.string(),
+  /** Fecha de registro fija (YYYY-MM-DD): solo lo fija quien llama (demo o tests); el modelo nunca lo ve. */
+  fechaActual: esquemaFecha.optional(),
 })
 export type ContextoHerramienta = z.infer<typeof esquemaContextoHerramienta>

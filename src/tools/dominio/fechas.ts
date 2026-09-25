@@ -74,6 +74,14 @@ export function diasEntre(desde: string, hasta: string): number {
   return aDiaAbsoluto(hasta) - aDiaAbsoluto(desde)
 }
 
+/**
+ * Fecha para la columna fecha_registro (7.2): la del contexto si quien llama la fijó y es válida (demo determinista, PRD 8);
+ * si no, la fecha real de hoy. Recibe un tipo estructural para no importar tipos.ts.
+ */
+export function fechaDeRegistro(ctx: { fechaActual?: string | undefined }): string {
+  return ctx.fechaActual !== undefined && esFechaValida(ctx.fechaActual) ? ctx.fechaActual : fechaHoyISO()
+}
+
 /** Fecha de hoy en la zona local como YYYY-MM-DD; se usa para fecha_registro (7.2). */
 export function fechaHoyISO(): string {
   const ahora = new Date()
